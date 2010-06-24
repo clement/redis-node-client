@@ -228,7 +228,8 @@ function testParseMultiBulkReply() {
 
     var e = new redisclient.ReplyParser(function (reply) {
         checkEqual(reply.type, redisclient.MULTIBULK, "testParseMultiBulkReply e-0");
-        checkEqual(reply.value, null, "testParseMultiBulkReply e-1");
+        check(reply.value instanceof Array, "testParseMultiBulkReply e-1");
+        checkEqual(reply.value.length, 0, "testParseMultiBulkReply e-2");
     });
     e.feed(bufferFromString("*0\r\n"));
 }
@@ -603,6 +604,12 @@ function testLRANGE() {
         checkEqual(values.length, 1, "testLRANGE");
         checkEqual(values[0], 'list0value1', "testLRANGE");
     });
+
+    client.lrange('list0', -1, 0, function(err, values) {
+        if (err) assert.fail(err, "testLRANGE");
+        checkEqual(values.length, 0, "testLRANGE");
+        checkDeepEqual(values, [], "testLRANGE");
+    });
 }
 
 function testLTRIM() {
@@ -791,12 +798,21 @@ function testSDIFF() {
     client.sadd('baz', 'a', expectNumber(1, "testSDIFF"));
     client.sadd('baz', 'd', expectNumber(1, "testSDIFF"));
 
+    client.sadd('cod', 'x', expectNumber(1, "testSDIFF"));
+    client.sadd('cod', 'b', expectNumber(1, "testSDIFF"));
+
     client.sdiff('foo', 'bar', 'baz', function (err, values) {
         if (err) assert.fail(err, "testSDIFF");
         values.sort();
         checkEqual(values.length, 2, "testSDIFF");
         checkEqual(values[0], 'b', "testSDIFF");
         checkEqual(values[1], 'x', "testSDIFF");
+    });
+
+    client.sdiff('foo', 'bar', 'baz', 'cod', function (err, values) {
+        if (err) assert.fail(err, "testSDIFF");
+        checkEqual(values.length, 0, "testSDIFF");
+        checkDeepEqual(values, [], "testSDIFF");
     });
 }
 
@@ -811,6 +827,9 @@ function testSDIFFSTORE() {
     client.sadd('baz', 'a', expectNumber(1, "testSDIFFSTORE"))
     client.sadd('baz', 'd', expectNumber(1, "testSDIFFSTORE"))
 
+    client.sadd('cod', 'x', expectNumber(1, "testSDIFFSTORE"));
+    client.sadd('cod', 'b', expectNumber(1, "testSDIFFSTORE"));
+
     // NB: SDIFFSTORE returns the number of elements in the dstkey 
 
     client.sdiffstore('quux', 'foo', 'bar', 'baz', expectNumber(2, "testSDIFFSTORE"))
@@ -820,6 +839,14 @@ function testSDIFFSTORE() {
         members.sort();
         redisclient.convertMultiBulkBuffersToUTF8Strings(members);
         checkDeepEqual(members, [ 'b', 'x' ], "testSDIFFSTORE");
+    });
+
+    client.sdiffstore('emptux', 'foo', 'bar', 'baz', 'cod', expectNumber(0, "testSDIFFSTORE"));
+
+    client.smembers('emptux', function(err, members) {
+        if (err) assert.fail(err, "testSDIFFSTORE");
+        checkEqual(members.length, 0, "testSDIFFSTORE");
+        checkDeepEqual(members, [], "testSDIFFSTORE");
     });
 }
 
@@ -863,6 +890,8 @@ function testSINTER() {
     client.sadd('sc', 'd', expectNumber(1, "testSINTER"));
     client.sadd('sc', 'e', expectNumber(1, "testSINTER"));
 
+    client.sadd('sd', 'f', expectNumber(1, "testSINTER"));
+
     client.sinter('sa', 'sb', function (err, intersection) {
         if (err) assert.fail(err, "testSINTER");
         checkEqual(intersection.length, 2, "testSINTER");
@@ -890,6 +919,14 @@ function testSINTER() {
         checkEqual(intersection.length, 1, "testSINTER");
         checkEqual(intersection[0], 'c', "testSINTER");
     });
+
+    // Empty intersection
+    
+    client.sinter('sa', 'sd', function (err, intersection) {
+        if (err) assert.fail(err, "testSINTER");
+        checkEqual(intersection.length, 0, "testSINTER");
+        checkDeepEqual(intersection, [], "testSINTER");
+    });
 }
 
 function testSINTERSTORE() {
@@ -905,12 +942,22 @@ function testSINTERSTORE() {
     client.sadd('sc', 'd', expectNumber(1, "testSINTERSTORE"));
     client.sadd('sc', 'e', expectNumber(1, "testSINTERSTORE"));
 
+    client.sadd('sd', 'f', expectNumber(1, "testSINTERSTORE"));
+
     client.sinterstore('foo', 'sa', 'sb', 'sc', expectNumber(1, "testSINTERSTORE"))
 
     client.smembers('foo', function (err, members) {
         if (err) assert.fail(err, "testSINTERSTORE");
         redisclient.convertMultiBulkBuffersToUTF8Strings(members);
         checkDeepEqual(members, [ 'c' ], "testSINTERSTORE");
+    });
+
+    client.sinterstore('bar', 'sa', 'sd', expectNumber(0, "testSINTERSTORE"))
+
+    client.smembers('bar', function (err, members) {
+        if (err) assert.fail(err, "testSINTERSTORE");
+        checkEqual(members.length, 0, "testSINTERSTORE");
+        checkDeepEqual(members, [], "testSINTERSTORE");
     });
 }
 
@@ -1269,6 +1316,12 @@ function testZRANGE() {
         redisclient.convertMultiBulkBuffersToUTF8Strings(members);
         checkDeepEqual(members, [ 'm1', 'm2' ], "testZRANGE");
     });
+
+    client.zrange('z0', -1, 0, function (err, members) {
+        if (err) assert.fail(err, "testZRANGE");
+        checkEqual(members.length, 0, "testZRANGE");
+        checkDeepEqual(members, [], "testZRANGE");
+    });
 }
 
 function testZREVRANGE() {
@@ -1280,6 +1333,12 @@ function testZREVRANGE() {
         if (err) assert.fail(err, "testZREVRANGE");
         redisclient.convertMultiBulkBuffersToUTF8Strings(members);
         checkDeepEqual(members, [ 'm2', 'm1', 'm0' ], "testZREVRANGE");
+    });
+
+    client.zrevrange('z0', -1, 0, function (err, members) {
+        if (err) assert.fail(err, "testZREVRANGE");
+        checkEqual(members.length, 0, "testZREVRANGE");
+        checkDeepEqual(members, [], "testZREVRANGE");
     });
 }
 
@@ -1302,7 +1361,7 @@ function testZRANGEBYSCORE() {
 
     client.zrangebyscore('z0', 10000, 100000, function (err, members) {
         if (err) assert.fail(err, "testZRANGEBYSCORE 8");
-        checkEqual(members, null, "testZRANGEBYSCORE 9");
+        checkDeepEqual(members, [], "testZRANGEBYSCORE 9");
     });
 }
 
